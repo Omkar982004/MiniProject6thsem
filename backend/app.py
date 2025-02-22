@@ -11,13 +11,16 @@ CORS(app)
 # If RAILWAY_PERSISTENT_DIR is not set, default to /var/lib/db.
 PERSISTENT_DIR = os.getenv("RAILWAY_PERSISTENT_DIR", "/var/lib/db")
 os.makedirs(PERSISTENT_DIR, exist_ok=True)  # Ensure the base persistent directory exists
+print("Persistent storage directory set to:", PERSISTENT_DIR)
 
 # Database path inside persistent storage.
 DB_PATH = os.path.join(PERSISTENT_DIR, "file_chunks.db")
+print("Database path set to:", DB_PATH)
 
 # Define an assets directory inside persistent storage.
 ASSETS_DIR = os.path.join(PERSISTENT_DIR, "assets")
 os.makedirs(ASSETS_DIR, exist_ok=True)  # Create the assets folder if it doesn't exist
+print("Assets directory set to:", ASSETS_DIR)
 
 # Use ASSETS_DIR to store file-related assets.
 UPLOAD_ROOT = os.path.join(ASSETS_DIR, "chunks")
@@ -31,6 +34,12 @@ os.makedirs(TMP_FOLDER, exist_ok=True)
 os.makedirs(NODFS_FOLDER, exist_ok=True)
 for folder in FOLDERS:
     os.makedirs(os.path.join(UPLOAD_ROOT, folder), exist_ok=True)
+
+print("Upload root set to:", UPLOAD_ROOT)
+print("Temporary folder set to:", TMP_FOLDER)
+print("No-DFS folder set to:", NODFS_FOLDER)
+for folder in FOLDERS:
+    print(f"DFS folder '{folder}' is set up at:", os.path.join(UPLOAD_ROOT, folder))
 
 def get_folder_path(folder):
     path = os.path.join(UPLOAD_ROOT, folder)
@@ -69,6 +78,7 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
+    print("Database initialized (tables created if not existing).")
 
 init_db()
 
@@ -115,10 +125,12 @@ def upload_file():
     # Save the file temporarily for processing.
     tmp_file_path = os.path.join(TMP_FOLDER, file.filename)
     file.save(tmp_file_path)
+    print(f"File {file.filename} saved temporarily at {tmp_file_path}")
 
     # Process: chunk file, compute hashes, replicate chunks.
     full_hash, total_chunks, chunk_info = process_and_chunk_file(tmp_file_path, file.filename)
     os.remove(tmp_file_path)  # Remove temporary file.
+    print(f"File {file.filename} processed: {total_chunks} chunks created with full hash {full_hash}")
 
     # Insert file record into DFS database.
     conn = sqlite3.connect(DB_PATH)
@@ -131,6 +143,7 @@ def upload_file():
                   (file_id, order, chash))
     conn.commit()
     conn.close()
+    print(f"File metadata for {file.filename} inserted into database with file_id {file_id}")
 
     return jsonify({'data': 'File uploaded, chunked, and replicated successfully!', 'file_id': file_id})
 
@@ -249,6 +262,7 @@ def upload_nodfs():
     # Save the file directly in the NODFS_FOLDER.
     save_path = os.path.join(NODFS_FOLDER, file.filename)
     file.save(save_path)
+    print(f"File {file.filename} saved to no-DFS folder at {save_path}")
 
     # Compute file hash and size.
     sha = hashlib.sha256()
@@ -260,6 +274,7 @@ def upload_nodfs():
                 break
             sha.update(data)
     file_hash = sha.hexdigest()
+    print(f"File {file.filename} computed hash: {file_hash} and size: {file_size} bytes")
 
     # Record metadata in files_nodfs table.
     conn = sqlite3.connect(DB_PATH)
@@ -269,6 +284,7 @@ def upload_nodfs():
     file_id = c.lastrowid
     conn.commit()
     conn.close()
+    print(f"No-DFS file metadata inserted with file_id {file_id}")
 
     return jsonify({'data': 'File uploaded successfully (no DFS)!', 'file_id': file_id})
 
@@ -306,4 +322,5 @@ def download_nodfs():
 if __name__ == '__main__':
     # Use the PORT environment variable (set by Railway) and host '0.0.0.0'
     port = int(os.environ.get("PORT", 5000))
+    print("Starting app on port", port)
     app.run(debug=True, host="0.0.0.0", port=port)
