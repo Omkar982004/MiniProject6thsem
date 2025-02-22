@@ -9,7 +9,7 @@ interface NoDFSFile {
   file_size: number;
 }
 
-const backendUrl = 'miniproject6thsem-production.up.railway.app';
+const backendUrl = 'https://miniproject6thsem-production.up.railway.app';
 
 export default function NoDFSPage() {
   const [fileList, setFileList] = useState<NoDFSFile[]>([]);
