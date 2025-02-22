@@ -9,7 +9,7 @@ interface FileRecord {
   total_chunks: number;
 }
 
-const backendUrl = 'http://localhost:5000';
+const backendUrl = 'miniproject6thsem-production.up.railway.app';
 const CHUNK_SIZE = 1024 * 1024; // 1 MB
 
 // Helper to concatenate an array of Uint8Array chunks into one ArrayBuffer
