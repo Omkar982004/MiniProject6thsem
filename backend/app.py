@@ -10,6 +10,7 @@ CORS(app)
 # Define paths using Railway's persistent directory.
 # If RAILWAY_PERSISTENT_DIR is not set, default to /var/lib/db.
 PERSISTENT_DIR = os.getenv("RAILWAY_PERSISTENT_DIR", "/var/lib/db")
+os.makedirs(PERSISTENT_DIR, exist_ok=True)  # Ensure the base persistent directory exists
 
 # Database path inside persistent storage.
 DB_PATH = os.path.join(PERSISTENT_DIR, "file_chunks.db")
