@@ -7,15 +7,25 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-# Configuration
-DB_PATH = 'file_chunks.db'
-UPLOAD_ROOT = 'chunks'  # Base directory for our files/chunks
-TMP_FOLDER = os.path.join(UPLOAD_ROOT, 'tmp')
+# Define paths using Railway's persistent directory.
+# If RAILWAY_PERSISTENT_DIR is not set, default to /var/lib/db.
+PERSISTENT_DIR = os.getenv("RAILWAY_PERSISTENT_DIR", "/var/lib/db")
+
+# Database path inside persistent storage.
+DB_PATH = os.path.join(PERSISTENT_DIR, "file_chunks.db")
+
+# Define an assets directory inside persistent storage.
+ASSETS_DIR = os.path.join(PERSISTENT_DIR, "assets")
+os.makedirs(ASSETS_DIR, exist_ok=True)  # Create the assets folder if it doesn't exist
+
+# Use ASSETS_DIR to store file-related assets.
+UPLOAD_ROOT = os.path.join(ASSETS_DIR, "chunks")
+TMP_FOLDER = os.path.join(UPLOAD_ROOT, "tmp")
 FOLDERS = ['folder1', 'folder2', 'folder3']  # Used for DFS (chunked files)
-NODFS_FOLDER = os.path.join(UPLOAD_ROOT, 'nodfs')  # Used for no-DFS (whole file)
+NODFS_FOLDER = os.path.join(UPLOAD_ROOT, "nodfs")  # Used for no-DFS (whole file)
 CHUNK_SIZE = 1024 * 1024  # 1 MB
 
-# Ensure required directories exist
+# Ensure required directories exist in persistent storage.
 os.makedirs(TMP_FOLDER, exist_ok=True)
 os.makedirs(NODFS_FOLDER, exist_ok=True)
 for folder in FOLDERS:
@@ -64,7 +74,7 @@ init_db()
 def process_and_chunk_file(file_path, original_filename):
     """
     Reads the file in 1 MB chunks, computes the full file hash and each chunk's hash.
-    Writes each chunk (replicated) into all three folders.
+    Writes each chunk (replicated) into all three DFS folders.
     Returns (full_hash, total_chunks, chunk_info) where chunk_info is a list of (chunk_order, chunk_hash).
     """
     base_name, extension = os.path.splitext(original_filename)
@@ -101,15 +111,15 @@ def upload_file():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
 
-    # Save the file temporarily for processing
+    # Save the file temporarily for processing.
     tmp_file_path = os.path.join(TMP_FOLDER, file.filename)
     file.save(tmp_file_path)
 
-    # Process: chunk file, compute hashes, replicate chunks
+    # Process: chunk file, compute hashes, replicate chunks.
     full_hash, total_chunks, chunk_info = process_and_chunk_file(tmp_file_path, file.filename)
-    os.remove(tmp_file_path)  # Remove temp file
+    os.remove(tmp_file_path)  # Remove temporary file.
 
-    # Insert file record into DFS database
+    # Insert file record into DFS database.
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('INSERT INTO files (filename, file_hash, total_chunks) VALUES (?, ?, ?)',
@@ -139,7 +149,7 @@ def download_chunk():
     """
     Downloads a single DFS file chunk.
     Expects query parameters: file_id and chunk_order.
-    Uses round-robin strategy to pick the folder.
+    Uses a round-robin strategy to pick the folder.
     """
     file_id = request.args.get('file_id')
     chunk_order = request.args.get('chunk_order')
@@ -218,7 +228,7 @@ def db_view():
     files = [dict(row) for row in c.fetchall()]
     c.execute('SELECT * FROM chunks')
     chunks = [dict(row) for row in c.fetchall()]
-    # Also include the no-DFS table view
+    # Also include the no-DFS table view.
     c.execute('SELECT * FROM files_nodfs')
     nodfs_files = [dict(row) for row in c.fetchall()]
     conn.close()
@@ -235,11 +245,11 @@ def upload_nodfs():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
 
-    # Save the file directly in the NODFS_FOLDER
+    # Save the file directly in the NODFS_FOLDER.
     save_path = os.path.join(NODFS_FOLDER, file.filename)
     file.save(save_path)
 
-    # Compute file hash and size
+    # Compute file hash and size.
     sha = hashlib.sha256()
     file_size = os.path.getsize(save_path)
     with open(save_path, 'rb') as f:
@@ -250,7 +260,7 @@ def upload_nodfs():
             sha.update(data)
     file_hash = sha.hexdigest()
 
-    # Record metadata in files_nodfs table
+    # Record metadata in files_nodfs table.
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('INSERT INTO files_nodfs (filename, file_hash, file_size) VALUES (?, ?, ?)',
@@ -293,4 +303,6 @@ def download_nodfs():
     return send_from_directory(NODFS_FOLDER, filename, as_attachment=True)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Use the PORT environment variable (set by Railway) and host '0.0.0.0'
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, host="0.0.0.0", port=port)
