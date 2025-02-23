@@ -133,7 +133,7 @@ def upload_file():
 
     # Process: chunk file, compute hashes, replicate chunks.
     full_hash, total_chunks, chunk_info = process_and_chunk_file(tmp_file_path, file.filename)
-    os.remove(tmp_file_path)  # Remove temporary file.
+    os.remove(tmp_file_path)
     print(f"File {file.filename} processed: {total_chunks} chunks created with full hash {full_hash}")
 
     # Insert file record into DFS database.
@@ -246,11 +246,95 @@ def db_view():
     files = [dict(row) for row in c.fetchall()]
     c.execute('SELECT * FROM chunks')
     chunks = [dict(row) for row in c.fetchall()]
-    # Also include the no-DFS table view.
     c.execute('SELECT * FROM files_nodfs')
     nodfs_files = [dict(row) for row in c.fetchall()]
     conn.close()
     return jsonify({'files': files, 'chunks': chunks, 'files_nodfs': nodfs_files})
+
+# ======================= DELETE Endpoints =======================
+
+@app.route('/delete_dfs', methods=['DELETE'])
+def delete_dfs():
+    """
+    Deletes a DFS file by:
+      - Removing its chunk files from all DFS folders.
+      - Removing its metadata from the 'files' and 'chunks' tables.
+    Expects query parameter: file_id.
+    """
+    file_id = request.args.get('file_id')
+    if not file_id:
+        return jsonify({'error': 'Missing file_id parameter'}), 400
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute('SELECT filename, total_chunks FROM files WHERE id=?', (file_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'File not found'}), 404
+
+    filename, total_chunks = row
+    base_name, extension = os.path.splitext(filename)
+
+    # Delete chunk files from all DFS folders
+    errors = []
+    for order in range(1, total_chunks + 1):
+        chunk_filename = f"{base_name}_chunk{order}{extension}"
+        for folder in FOLDERS:
+            folder_path = get_folder_path(folder)
+            chunk_path = os.path.join(folder_path, chunk_filename)
+            try:
+                if os.path.exists(chunk_path):
+                    os.remove(chunk_path)
+                    print(f"Deleted {chunk_path}")
+            except Exception as e:
+                errors.append(f"Error deleting {chunk_path}: {e}")
+
+    # Remove the file record and associated chunks from the database
+    c.execute('DELETE FROM files WHERE id=?', (file_id,))
+    c.execute('DELETE FROM chunks WHERE file_id=?', (file_id,))
+    conn.commit()
+    conn.close()
+
+    if errors:
+        return jsonify({'data': 'Deletion partially completed', 'errors': errors}), 207
+    return jsonify({'data': 'DFS file and all chunks deleted successfully!', 'file_id': file_id})
+
+@app.route('/delete_nodfs', methods=['DELETE'])
+def delete_nodfs():
+    """
+    Deletes a No-DFS file by:
+      - Removing the file from the NODFS folder.
+      - Removing its metadata from the 'files_nodfs' table.
+    Expects query parameter: file_id.
+    """
+    file_id = request.args.get('file_id')
+    if not file_id:
+        return jsonify({'error': 'Missing file_id parameter'}), 400
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute('SELECT filename FROM files_nodfs WHERE id=?', (file_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'File not found'}), 404
+
+    filename = row[0]
+    save_path = os.path.join(NODFS_FOLDER, filename)
+    try:
+        if os.path.exists(save_path):
+            os.remove(save_path)
+            print(f"Deleted No-DFS file at {save_path}")
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': f'Error deleting file: {e}'}), 500
+
+    c.execute('DELETE FROM files_nodfs WHERE id=?', (file_id,))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'data': 'No-DFS file deleted successfully!', 'file_id': file_id})
 
 # ======================= NO-DFS Endpoints =======================
 

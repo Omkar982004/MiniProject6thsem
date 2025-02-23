@@ -62,6 +62,19 @@ export default function NoDFSPage() {
     a.remove();
   };
 
+  // Delete No-DFS file: sends a DELETE request to remove file and metadata.
+  const handleDeleteNoDFS = async (fileId: number) => {
+    const res = await fetch(`${backendUrl}/delete_nodfs?file_id=${fileId}`, {
+      method: 'DELETE',
+    });
+    if (res.ok) {
+      fetchFiles();
+    } else {
+      const data = await res.json();
+      console.error("Error deleting No-DFS file:", data);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">No-DFS Pipeline (Whole Files)</h1>
@@ -83,12 +96,20 @@ export default function NoDFSPage() {
         {fileList.map((fileItem) => (
           <li key={fileItem.id} className="border p-2 mb-1 flex justify-between items-center">
             <span>{fileItem.filename}</span>
-            <button
-              className="bg-green-500 text-white p-2 rounded"
-              onClick={() => handleDownload(fileItem)}
-            >
-              Download
-            </button>
+            <div className="flex gap-2">
+              <button
+                className="bg-green-500 text-white p-2 rounded"
+                onClick={() => handleDownload(fileItem)}
+              >
+                Download
+              </button>
+              <button
+                className="bg-red-500 text-white p-2 rounded"
+                onClick={() => handleDeleteNoDFS(fileItem.id)}
+              >
+                Delete
+              </button>
+            </div>
           </li>
         ))}
       </ul>

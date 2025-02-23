@@ -129,6 +129,19 @@ export default function DFSPage() {
     setDownloadProgress([]);
   };
 
+  // Delete DFS file: sends a DELETE request to remove file metadata and chunk files.
+  const handleDeleteDFS = async (fileId: number) => {
+    const res = await fetch(`${backendUrl}/delete_dfs?file_id=${fileId}`, {
+      method: 'DELETE',
+    });
+    if (res.ok) {
+      fetchFiles();
+    } else {
+      const data = await res.json();
+      console.error("Error deleting DFS file:", data);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">DFS Pipeline (Chunked Files)</h1>
@@ -150,12 +163,20 @@ export default function DFSPage() {
         {fileList.map((fileItem) => (
           <li key={fileItem.id} className="border p-2 mb-1 flex justify-between items-center">
             <span>{fileItem.filename}</span>
-            <button
-              className="bg-green-500 text-white p-2 rounded"
-              onClick={() => handleDownload(fileItem)}
-            >
-              Download
-            </button>
+            <div className="flex gap-2">
+              <button
+                className="bg-green-500 text-white p-2 rounded"
+                onClick={() => handleDownload(fileItem)}
+              >
+                Download
+              </button>
+              <button
+                className="bg-red-500 text-white p-2 rounded"
+                onClick={() => handleDeleteDFS(fileItem.id)}
+              >
+                Delete
+              </button>
+            </div>
           </li>
         ))}
       </ul>
