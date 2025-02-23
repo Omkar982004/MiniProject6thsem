@@ -113,6 +113,10 @@ def process_and_chunk_file(file_path, original_filename):
     total_chunks = counter - 1
     return full_hash, total_chunks, chunk_info
 
+@app.route('/')
+def index():
+    return "Hello from Flask..."
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """DFS upload: Process file into chunks, replicate chunks, record metadata."""
