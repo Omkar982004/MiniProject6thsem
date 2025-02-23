@@ -3,10 +3,6 @@ import os
 
 app = Flask(__name__)
 
-@app.before_serving
-def startup():
-    print("Flask app has started and is ready to receive requests!")
-
 @app.route('/')
 def hello():
     return "Hello from Minimal Flask on Railway!"
